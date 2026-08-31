@@ -63,7 +63,9 @@ jobs:
           s = p.read_text()
           s = s.replace("applicationId 'com.example.app'", f"applicationId '{__import__('os').environ['APP_PACKAGE']}'")
           s = s.replace("versionName '1.0.0'", f"versionName '{__import__('os').environ['VERSION_NAME']}'")
-          s = s.replace("'\\\"https://example.com\\\"'", "'\\\"" + (__import__('os').environ.get('SOURCE_URL') or '') + "\\\"'")
+          url = __import__('os').environ.get('SOURCE_URL') or 'about:blank'
+          escaped = url.replace('\\', '\\\\').replace('"', '\\"')
+          s = s.replace('__APKFORGE_URL__', escaped)
           p.write_text(s)
           m = Path('app/src/main/AndroidManifest.xml')
           m.write_text(m.read_text().replace('APKForge App', __import__('os').environ['APP_NAME']))
