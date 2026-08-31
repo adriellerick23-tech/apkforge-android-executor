@@ -21,7 +21,7 @@ on:
         type: string
       source_url:
         description: "URL HTTPS para modo WebView"
-        required: false
+        required: true
         type: string
 
 permissions:
@@ -57,6 +57,14 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Validate WebView source
+        run: |
+          test -n "$SOURCE_URL"
+          case "$SOURCE_URL" in
+            https://*) ;;
+            *) echo "SOURCE_URL must use HTTPS"; exit 1 ;;
+          esac
 
       - name: Configure generated app
         working-directory: executor/templates/webview
