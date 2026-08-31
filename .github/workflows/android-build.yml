@@ -1,0 +1,92 @@
+name: APKForge Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "ID da conversão APKForge"
+        required: true
+        type: string
+      package_id:
+        description: "Application ID Android"
+        required: true
+        type: string
+      app_name:
+        description: "Nome exibido do app"
+        required: true
+        type: string
+      version_name:
+        description: "Versão semver"
+        required: true
+        type: string
+      source_url:
+        description: "URL HTTPS para modo WebView"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      APP_PACKAGE: ${{ inputs.package_id }}
+      APP_NAME: ${{ inputs.app_name }}
+      VERSION_NAME: ${{ inputs.version_name }}
+      SOURCE_URL: ${{ inputs.source_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Configure generated app
+        working-directory: executor/templates/webview
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle')
+          s = p.read_text()
+          s = s.replace("applicationId 'com.example.app'", f"applicationId '{__import__('os').environ['APP_PACKAGE']}'")
+          s = s.replace("versionName '1.0.0'", f"versionName '{__import__('os').environ['VERSION_NAME']}'")
+          s = s.replace("'\\\"https://example.com\\\"'", "'\\\"" + (__import__('os').environ.get('SOURCE_URL') or '') + "\\\"'")
+          p.write_text(s)
+          m = Path('app/src/main/AndroidManifest.xml')
+          m.write_text(m.read_text().replace('APKForge App', __import__('os').environ['APP_NAME']))
+          PY
+
+      - name: Build debug APK
+        working-directory: executor/templates/webview
+        run: gradle --no-daemon assembleDebug
+
+      - name: Validate APK and compute digest
+        working-directory: executor/templates/webview
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          file app/build/outputs/apk/debug/app-debug.apk
+          sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: apkforge-${{ env.JOB_ID }}
+          path: |
+            executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk
+            executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
