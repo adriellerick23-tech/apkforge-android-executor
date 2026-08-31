@@ -60,6 +60,12 @@ BUILD_TIMEOUT_MS=900000
 
 Os segredos `APKFORGE_WORKER_TOKEN` e `APKFORGE_CALLBACK_SECRET` já foram provisionados no projeto APKForge. No host do executor, injete os mesmos nomes por secret manager ou variáveis de ambiente; nunca copie valores para o repositório, para imagens públicas ou para logs. O worker só deve ser iniciado depois de confirmar que ambos estão presentes e que o endpoint interno está acessível pela rede privada ou por uma allowlist restrita.
 
+## Execução gratuita via GitHub Actions
+
+O repositório público `adriellerick23-tech/apkforge-android-executor` contém o workflow `APKForge Android Build`. Para disparar manualmente, abra a aba **Actions**, selecione o workflow, clique em **Run workflow**, escolha a branch `main` e informe `job_id`, `package_id`, `app_name`, `version_name` e, para WebView, uma `source_url` HTTPS. Ao concluir, o APK debug e o arquivo de checksum ficam disponíveis em **Artifacts** por 7 dias.
+
+Os secrets do repositório foram validados com sucesso e aparecem apenas pelos nomes `APKFORGE_WORKER_TOKEN` e `APKFORGE_CALLBACK_SECRET`; os valores não são registrados neste arquivo, no histórico Git ou nos logs.
+
 ## Operação
 
 Execute o worker em um serviço persistente com reinício automático. Antes de liberar tráfego, valide que o token nunca aparece em logs, que o callback exige HMAC, que jobs falhos limpam seus diretórios e que downloads usam URLs assinadas com expiração. O executor foi separado para permitir que a aplicação web continue stateless e que a máquina Android seja dimensionada independentemente.
