@@ -14,7 +14,8 @@ class MainActivity : Activity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.webViewClient = WebViewClient()
-        webView.loadUrl(BuildConfig.APKFORGE_URL)
+        val target = if (BuildConfig.APKFORGE_MODE == "local") "file:///android_asset/index.html" else BuildConfig.APKFORGE_URL
+        webView.loadUrl(target)
         setContentView(webView)
     }
 }

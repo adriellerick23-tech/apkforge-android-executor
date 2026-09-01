@@ -20,7 +20,11 @@ on:
         required: true
         type: string
       source_url:
-        description: "URL HTTPS para modo WebView"
+        description: "URL HTTPS do site ou bundle ZIP"
+        required: true
+        type: string
+      source_mode:
+        description: "webview ou local"
         required: true
         type: string
 
@@ -42,6 +46,7 @@ jobs:
       APP_NAME: ${{ inputs.app_name }}
       VERSION_NAME: ${{ inputs.version_name }}
       SOURCE_URL: ${{ inputs.source_url }}
+      SOURCE_MODE: ${{ inputs.source_mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -58,13 +63,23 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Validate WebView source
+      - name: Validate and prepare source
         run: |
           test -n "$SOURCE_URL"
           case "$SOURCE_URL" in
             https://*) ;;
             *) echo "SOURCE_URL must use HTTPS"; exit 1 ;;
           esac
+          test "$SOURCE_MODE" = "webview" -o "$SOURCE_MODE" = "local"
+          if [ "$SOURCE_MODE" = "local" ]; then
+            rm -rf /tmp/apkforge-bundle
+            mkdir -p /tmp/apkforge-bundle/site
+            curl --fail --location --retry 3 --max-time 120 "$SOURCE_URL" -o /tmp/apkforge-bundle/source.zip
+            unzip -q /tmp/apkforge-bundle/source.zip -d /tmp/apkforge-bundle/site
+            test -f /tmp/apkforge-bundle/site/index.html
+            mkdir -p executor/templates/webview/app/src/main/assets
+            cp -R /tmp/apkforge-bundle/site/. executor/templates/webview/app/src/main/assets/
+          fi
 
       - name: Configure generated app
         working-directory: executor/templates/webview
@@ -75,6 +90,7 @@ jobs:
           s = p.read_text()
           s = s.replace("applicationId 'com.example.app'", f"applicationId '{__import__('os').environ['APP_PACKAGE']}'")
           s = s.replace("versionName '1.0.0'", f"versionName '{__import__('os').environ['VERSION_NAME']}'")
+          s = s.replace('__APKFORGE_MODE__', __import__('os').environ.get('SOURCE_MODE', 'webview'))
           url = __import__('os').environ.get('SOURCE_URL') or 'about:blank'
           escaped = url.replace('\\', '\\\\').replace('"', '\\"')
           s = s.replace('__APKFORGE_URL__', escaped)
