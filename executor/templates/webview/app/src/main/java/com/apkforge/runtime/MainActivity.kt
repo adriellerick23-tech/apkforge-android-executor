@@ -58,6 +58,15 @@ class MainActivity : Activity() {
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                     if (request.isForMainFrame) showFallback("Não foi possível abrir o app", "Verifique a conexão ou gere o APK novamente.\nCódigo: ${error.errorCode}")
                 }
+
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: android.webkit.WebResourceResponse) {
+                    if (request.isForMainFrame && errorResponse.statusCode >= 400) showFallback("O site não respondeu", "HTTP ${errorResponse.statusCode}. Verifique a URL pública e gere o APK novamente.")
+                }
+
+                override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                    showFallback("O motor do app foi reiniciado", "A WebView encontrou uma falha de renderização. Feche e abra o APK novamente.")
+                    return true
+                }
             }
             view.webChromeClient = WebChromeClient()
             val mode = BuildConfig.APKFORGE_MODE
@@ -81,6 +90,9 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         webView?.apply {
             stopLoading()
+            loadUrl("about:blank")
+            clearHistory()
+            removeAllViews()
             webChromeClient = null
             webViewClient = WebViewClient()
             destroy()

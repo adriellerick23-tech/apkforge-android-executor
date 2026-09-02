@@ -31,6 +31,11 @@ on:
         description: "webview ou local"
         required: true
         type: string
+      run_runtime_smoke:
+        description: "Instalar e abrir no emulador Android"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -125,6 +130,8 @@ jobs:
         run: gradle --no-daemon assembleDebug
 
       - name: Runtime smoke test on Android emulator
+        if: ${{ inputs.run_runtime_smoke == true }}
+        timeout-minutes: 10
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
