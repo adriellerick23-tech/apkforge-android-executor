@@ -25,10 +25,11 @@ async function signedCallback(payload) {
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = ""; let stderr = ""; const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("BUILD_TIMEOUT")); }, TIMEOUT_MS);
+    let stdout = ""; let stderr = ""; let settled = false;
+    const timer = setTimeout(() => { child.kill("SIGKILL"); settled = true; reject(new Error("BUILD_TIMEOUT")); }, TIMEOUT_MS);
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); }); child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("error", (error) => { clearTimeout(timer); reject(error); });
-    child.on("close", (code) => { clearTimeout(timer); code === 0 ? resolve({ stdout, stderr }) : reject(new Error(`GRADLE_EXIT_${code}: ${stderr.slice(-1000)}`)); });
+    child.on("error", (error) => { if (settled) return; settled = true; clearTimeout(timer); reject(error); });
+    child.on("close", (code) => { if (settled) return; settled = true; clearTimeout(timer); code === 0 ? resolve({ stdout, stderr }) : reject(new Error(`GRADLE_EXIT_${code}: ${stderr.slice(-1000)}`)); });
   });
 }
 
@@ -36,31 +37,49 @@ export async function cleanupWorkdir(workdir) {
   await rm(workdir, { recursive: true, force: true });
 }
 
-export async function build(job) {
-  const workdir = await mkdtemp(join(tmpdir(), `apkforge-${job.jobId}-`));
+export async function build(job, dependencies = {}) {
+  const makeTemp = dependencies.mkdtemp ?? mkdtemp;
+  const makeDir = dependencies.mkdir ?? mkdir;
+  const write = dependencies.writeFile ?? writeFile;
+  const read = dependencies.readFile ?? readFile;
+  const execute = dependencies.run ?? run;
+  const notify = dependencies.signedCallback ?? signedCallback;
+  const cleanup = dependencies.cleanup ?? cleanupWorkdir;
+  const workdir = await makeTemp(join(tmpdir(), `apkforge-${job.jobId}-`));
   try {
-    await signedCallback({ jobId: job.jobId, status: "validating", progress: 15, message: "entrada isolada e validada", attempt: job.attempt });
+    await notify({ jobId: job.jobId, status: "validating", progress: 15, message: "entrada isolada e validada", attempt: job.attempt });
     // O adapter real deve baixar sourceKey/iconKey via SDK de storage e copiar o template escolhido.
-    const project = join(workdir, "android"); await mkdir(project, { recursive: true });
-    await writeFile(join(project, "build-config.json"), JSON.stringify({ packageId: job.packageId, appName: job.appName, version: job.version, sourceType: job.sourceType, openMode: job.openMode }));
-    await signedCallback({ jobId: job.jobId, status: "building", progress: 50, message: "template Android montado", attempt: job.attempt });
-    await run("./gradlew", ["assembleDebug", "--no-daemon", "--offline"], project);
-    await signedCallback({ jobId: job.jobId, status: "signing", progress: 82, message: "APK debug assinado", attempt: job.attempt });
-    const apk = await readFile(join(project, "app/build/outputs/apk/debug/app-debug.apk"));
+    const project = join(workdir, "android"); await makeDir(project, { recursive: true });
+    await write(join(project, "build-config.json"), JSON.stringify({ packageId: job.packageId, appName: job.appName, version: job.version, sourceType: job.sourceType, openMode: job.openMode }));
+    await notify({ jobId: job.jobId, status: "building", progress: 50, message: "template Android montado", attempt: job.attempt });
+    await execute("./gradlew", ["assembleDebug", "--no-daemon", "--offline"], project);
+    await notify({ jobId: job.jobId, status: "signing", progress: 82, message: "APK debug assinado", attempt: job.attempt });
+    const apk = await read(join(project, "app/build/outputs/apk/debug/app-debug.apk"));
     if (apk.length < 4096) throw new Error("APK_TOO_SMALL");
-    await signedCallback({ jobId: job.jobId, status: "completed", progress: 100, message: "APK pronto", artifactKey: `jobs/${job.jobId}/${randomUUID()}.apk`, sha256: sha256(apk), attempt: job.attempt });
+    await notify({ jobId: job.jobId, status: "completed", progress: 100, message: "APK pronto", artifactKey: `jobs/${job.jobId}/${randomUUID()}.apk`, sha256: sha256(apk), attempt: job.attempt });
   } catch (error) {
-    await signedCallback({ jobId: job.jobId, status: "failed", progress: 100, message: String(error.message ?? error).slice(0, 500), attempt: job.attempt });
-  } finally { await cleanupWorkdir(workdir); }
+    const message = error instanceof Error ? error.message : String(error);
+    await notify({ jobId: job.jobId, status: "failed", progress: 100, message: message.slice(0, 500), attempt: job.attempt });
+  } finally { await cleanup(workdir); }
+}
+
+export async function reserveJob(fetchImpl = fetch) {
+  const response = await fetchImpl(`${API_URL}/api/internal/worker/next`, { headers: { authorization: `Bearer ${TOKEN}` } });
+  if (response.status === 204) return undefined;
+  if (!response.ok) throw new Error(`worker next ${response.status}`);
+  return response.json();
+}
+
+export async function pollOnce(fetchImpl = fetch, buildImpl = build) {
+  const job = await reserveJob(fetchImpl);
+  if (job?.jobId) await buildImpl(job);
+  return job;
 }
 
 async function loop() {
   console.log("APKForge Android Executor online");
   while (true) {
-    try {
-      const response = await fetch(`${API_URL}/api/internal/worker/next`, { headers: { authorization: `Bearer ${TOKEN}` } });
-      if (response.ok) { const job = await response.json(); if (job?.jobId) await build(job); }
-    } catch (error) { console.error("worker cycle failed", error.message); }
+    try { await pollOnce(); } catch (error) { console.error("worker cycle failed", error instanceof Error ? error.message : String(error)); }
     await sleep(POLL_MS);
   }
 }
