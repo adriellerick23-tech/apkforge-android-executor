@@ -129,6 +129,13 @@ jobs:
         working-directory: executor/templates/webview
         run: gradle --no-daemon assembleDebug
 
+      - name: Enable KVM for Android emulator
+        if: ${{ inputs.run_runtime_smoke == true }}
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Runtime smoke test on Android emulator
         if: ${{ inputs.run_runtime_smoke == true }}
         timeout-minutes: 10
@@ -138,7 +145,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             timeout 60s adb install -r executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk
