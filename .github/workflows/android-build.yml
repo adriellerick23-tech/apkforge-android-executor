@@ -127,16 +127,18 @@ jobs:
       - name: Runtime smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
+          target: default
           arch: x86_64
           profile: pixel_2
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            adb install -r executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am force-stop "$APP_PACKAGE"
-            adb shell monkey -p "$APP_PACKAGE" -c android.intent.category.LAUNCHER 1
+            timeout 60s adb install -r executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk
+            timeout 30s adb shell am force-stop "$APP_PACKAGE"
+            timeout 30s adb shell monkey -p "$APP_PACKAGE" -c android.intent.category.LAUNCHER 1
             sleep 5
-            adb shell dumpsys activity activities | grep -q "$APP_PACKAGE"
+            timeout 30s adb shell dumpsys activity activities | grep -q "$APP_PACKAGE"
 
       - name: Validate APK and compute digest
         working-directory: executor/templates/webview
