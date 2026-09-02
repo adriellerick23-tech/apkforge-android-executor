@@ -2,6 +2,6 @@
   "name": "apkforge-android-executor",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node src/worker.mjs" },
+  "scripts": { "start": "node src/worker.mjs", "test": "node --test test/*.test.mjs" },
   "engines": { "node": ">=20" }
 }

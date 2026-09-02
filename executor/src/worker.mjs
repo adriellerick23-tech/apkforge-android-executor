@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const API_URL = process.env.APKFORGE_API_URL;
 const TOKEN = process.env.APKFORGE_WORKER_TOKEN;
@@ -31,7 +32,11 @@ function run(command, args, cwd) {
   });
 }
 
-async function build(job) {
+export async function cleanupWorkdir(workdir) {
+  await rm(workdir, { recursive: true, force: true });
+}
+
+export async function build(job) {
   const workdir = await mkdtemp(join(tmpdir(), `apkforge-${job.jobId}-`));
   try {
     await signedCallback({ jobId: job.jobId, status: "validating", progress: 15, message: "entrada isolada e validada", attempt: job.attempt });
@@ -46,7 +51,7 @@ async function build(job) {
     await signedCallback({ jobId: job.jobId, status: "completed", progress: 100, message: "APK pronto", artifactKey: `jobs/${job.jobId}/${randomUUID()}.apk`, sha256: sha256(apk), attempt: job.attempt });
   } catch (error) {
     await signedCallback({ jobId: job.jobId, status: "failed", progress: 100, message: String(error.message ?? error).slice(0, 500), attempt: job.attempt });
-  } finally { await rm(workdir, { recursive: true, force: true }); }
+  } finally { await cleanupWorkdir(workdir); }
 }
 
 async function loop() {
@@ -60,4 +65,4 @@ async function loop() {
   }
 }
 
-loop();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) loop();
