@@ -153,10 +153,7 @@ jobs:
             timeout 30s adb shell am force-stop "$APP_PACKAGE"
             timeout 30s adb shell monkey -p "$APP_PACKAGE" -c android.intent.category.LAUNCHER 1
             sleep 5
-            if ! timeout 30s adb shell pidof "$APP_PACKAGE"; then
-              adb logcat -d | tail -n 240
-              exit 1
-            fi
+            timeout 30s adb shell pidof "$APP_PACKAGE" || { adb logcat -d | tail -n 240; exit 1; }
 
       - name: Validate APK and compute digest
         working-directory: executor/templates/webview
