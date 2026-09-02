@@ -43,7 +43,7 @@ concurrency:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       JOB_ID: ${{ inputs.job_id }}
       APP_PACKAGE: ${{ inputs.package_id }}
@@ -123,6 +123,20 @@ jobs:
       - name: Build debug APK
         working-directory: executor/templates/webview
         run: gradle --no-daemon assembleDebug
+
+      - name: Runtime smoke test on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: Pixel_2
+          disable-animations: true
+          script: |
+            adb install -r executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am force-stop "$APP_PACKAGE"
+            adb shell monkey -p "$APP_PACKAGE" -c android.intent.category.LAUNCHER 1
+            sleep 5
+            adb shell dumpsys activity activities | grep -q "$APP_PACKAGE"
 
       - name: Validate APK and compute digest
         working-directory: executor/templates/webview
