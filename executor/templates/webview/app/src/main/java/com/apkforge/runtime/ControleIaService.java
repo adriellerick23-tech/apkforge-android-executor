@@ -36,8 +36,8 @@ public class ControleIaService extends AccessibilityService {
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (!controlling || event == null || rootInActiveWindow == null) return;
-        lastSnapshot = collectText(rootInActiveWindow, 0).trim();
+        if (!controlling || event == null || getRootInActiveWindow() == null) return;
+        lastSnapshot = collectText(getRootInActiveWindow(), 0).trim();
     }
 
     @Override public void onInterrupt() { pauseControl(); }
@@ -80,12 +80,12 @@ public class ControleIaService extends AccessibilityService {
 
     public String getScreenSnapshot() {
         if (!lastSnapshot.isEmpty()) return lastSnapshot;
-        return rootInActiveWindow == null ? "" : collectText(rootInActiveWindow, 0).trim();
+        return getRootInActiveWindow() == null ? "" : collectText(getRootInActiveWindow(), 0).trim();
     }
 
     public boolean clickText(String target) {
         if (!controlling || paused || target == null || target.trim().isEmpty()) return false;
-        AccessibilityNodeInfo node = findNode(rootInActiveWindow, target);
+        AccessibilityNodeInfo node = findNode(getRootInActiveWindow(), target);
         if (node == null) return false;
         AccessibilityNodeInfo current = node;
         for (int i = 0; i < 8 && current != null; i++, current = current.getParent()) {
@@ -95,9 +95,9 @@ public class ControleIaService extends AccessibilityService {
     }
 
     public boolean typeText(String text) {
-        if (!controlling || paused || rootInActiveWindow == null) return false;
-        AccessibilityNodeInfo field = rootInActiveWindow.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        if (field == null) field = findEditable(rootInActiveWindow);
+        if (!controlling || paused || getRootInActiveWindow() == null) return false;
+        AccessibilityNodeInfo field = getRootInActiveWindow().findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (field == null) field = findEditable(getRootInActiveWindow());
         if (field == null) return false;
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text == null ? "" : text);
@@ -105,7 +105,7 @@ public class ControleIaService extends AccessibilityService {
     }
 
     public boolean scrollDown() {
-        AccessibilityNodeInfo node = findScrollable(rootInActiveWindow);
+        AccessibilityNodeInfo node = findScrollable(getRootInActiveWindow());
         return !paused && controlling && node != null && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
     }
 
