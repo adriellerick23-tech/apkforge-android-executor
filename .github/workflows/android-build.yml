@@ -28,7 +28,7 @@ on:
         required: false
         type: string
       source_mode:
-        description: "webview ou local"
+        description: "webview, local ou expo"
         required: true
         type: string
       run_runtime_smoke:
@@ -76,11 +76,11 @@ jobs:
       - name: Validate and prepare source
         run: |
           test -n "$SOURCE_URL"
+          test "$SOURCE_MODE" = "webview" -o "$SOURCE_MODE" = "local" -o "$SOURCE_MODE" = "expo"
           case "$SOURCE_URL" in
             https://*) ;;
             *) echo "SOURCE_URL must use HTTPS"; exit 1 ;;
           esac
-          test "$SOURCE_MODE" = "webview" -o "$SOURCE_MODE" = "local"
           if [ "$SOURCE_MODE" = "local" ]; then
             rm -rf /tmp/apkforge-bundle
             mkdir -p /tmp/apkforge-bundle/site
@@ -90,6 +90,20 @@ jobs:
             mkdir -p executor/templates/webview/app/src/main/assets
             cp -R /tmp/apkforge-bundle/site/. executor/templates/webview/app/src/main/assets/
           fi
+
+      - name: Prepare full Expo source
+        if: ${{ inputs.source_mode == 'expo' }}
+        run: |
+          rm -rf /tmp/controle-ia-source /tmp/controle-ia-source.zip /tmp/apkforge-output
+          mkdir -p /tmp/controle-ia-source /tmp/apkforge-output
+          curl --fail --location --retry 3 --max-time 180 "$SOURCE_URL" -o /tmp/controle-ia-source.zip
+          unzip -q /tmp/controle-ia-source.zip -d /tmp/controle-ia-source
+          PROJECT_ROOT=$(find /tmp/controle-ia-source -name package.json -not -path '*/node_modules/*' -print -quit | xargs dirname)
+          test -n "$PROJECT_ROOT"
+          cd "$PROJECT_ROOT"
+          corepack enable
+          pnpm install --frozen-lockfile
+          npx expo prebuild --platform android --non-interactive
 
       - name: Prepare optional app icon
         working-directory: executor/templates/webview
@@ -136,9 +150,22 @@ jobs:
           test -f app/src/main/res/xml/controle_ia_accessibility_service.xml
           test -f app/src/main/java/com/apkforge/runtime/ControleIaService.java
 
+      - name: Build full Expo APK
+        if: ${{ inputs.source_mode == 'expo' }}
+        run: |
+          PROJECT_ROOT=$(find /tmp/controle-ia-source -name gradlew -not -path '*/node_modules/*' -print -quit | xargs dirname)
+          cd "$PROJECT_ROOT"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/apkforge-output/app-debug.apk
+
       - name: Build debug APK
+        if: ${{ inputs.source_mode != 'expo' }}
         working-directory: executor/templates/webview
-        run: gradle --no-daemon assembleDebug
+        run: |
+          mkdir -p /tmp/apkforge-output
+          gradle --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/apkforge-output/app-debug.apk
 
       - name: Enable KVM for Android emulator
         if: ${{ inputs.run_runtime_smoke == true }}
@@ -167,20 +194,16 @@ jobs:
             timeout 30s adb shell pidof "$APP_PACKAGE" || { adb logcat -d | tail -n 240; exit 1; }
 
       - name: Validate APK and compute digest
-        working-directory: executor/templates/webview
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          file app/build/outputs/apk/debug/app-debug.apk
-          test "$(grep -a -c 'ControleIaService' app/build/outputs/apk/debug/app-debug.apk || true)" -ge 0
-          (cd app/build/outputs/apk/debug && sha256sum app-debug.apk) | tee app/build/outputs/apk/debug/app-debug.apk.sha256
+          test -s /tmp/apkforge-output/app-debug.apk
+          file /tmp/apkforge-output/app-debug.apk
+          sha256sum /tmp/apkforge-output/app-debug.apk | tee /tmp/apkforge-output/app-debug.apk.sha256
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: apkforge-${{ env.JOB_ID }}
-          path: |
-            executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk
-            executor/templates/webview/app/build/outputs/apk/debug/app-debug.apk.sha256
+          path: /tmp/apkforge-output/*
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
