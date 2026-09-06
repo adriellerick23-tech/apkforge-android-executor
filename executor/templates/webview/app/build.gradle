@@ -3,6 +3,6 @@ plugins { id 'com.android.application' }
 android { namespace 'com.apkforge.runtime'; compileSdk 35
     buildFeatures { buildConfig true }
     buildTypes { debug { buildConfigField 'String', 'APKFORGE_URL', '\"__APKFORGE_URL__\"'; buildConfigField 'String', 'APKFORGE_MODE', '\"__APKFORGE_MODE__\"' } }
-    defaultConfig { applicationId 'com.example.app'; minSdk 26; targetSdk 35; versionCode 1; versionName '1.0.0' }
+    defaultConfig { applicationId 'com.example.app'; minSdk 26; targetSdk 35; versionCode __APKFORGE_VERSION_CODE__; versionName '1.0.0' }
 }
 

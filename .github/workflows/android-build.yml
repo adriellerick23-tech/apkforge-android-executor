@@ -115,6 +115,9 @@ jobs:
           s = p.read_text()
           s = s.replace("applicationId 'com.example.app'", f"applicationId '{os.environ['APP_PACKAGE']}'")
           s = s.replace("versionName '1.0.0'", f"versionName '{os.environ['VERSION_NAME']}'")
+          parts = os.environ['VERSION_NAME'].split('.')
+          version_code = int(parts[0]) * 10000 + int(parts[1]) * 100 + int(parts[2].split('-')[0])
+          s = s.replace('__APKFORGE_VERSION_CODE__', str(version_code))
           s = s.replace('__APKFORGE_MODE__', os.environ.get('SOURCE_MODE', 'webview'))
           url = os.environ.get('SOURCE_URL') or 'about:blank'
           url_escaped = url.replace('\\', '\\\\').replace('"', '\\"')
@@ -124,6 +127,14 @@ jobs:
           manifest = m.read_text().replace('APKForge App', escape(os.environ['APP_NAME']))
           m.write_text(manifest)
           PY
+
+      - name: Validate native accessibility integration
+        working-directory: executor/templates/webview
+        run: |
+          grep -q 'ControleIaService' app/src/main/AndroidManifest.xml
+          grep -q 'BIND_ACCESSIBILITY_SERVICE' app/src/main/AndroidManifest.xml
+          test -f app/src/main/res/xml/controle_ia_accessibility_service.xml
+          test -f app/src/main/java/com/apkforge/runtime/ControleIaService.java
 
       - name: Build debug APK
         working-directory: executor/templates/webview
@@ -160,6 +171,7 @@ jobs:
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
           file app/build/outputs/apk/debug/app-debug.apk
+          test "$(grep -a -c 'ControleIaService' app/build/outputs/apk/debug/app-debug.apk || true)" -ge 0
           (cd app/build/outputs/apk/debug && sha256sum app-debug.apk) | tee app/build/outputs/apk/debug/app-debug.apk.sha256
 
       - name: Upload APK artifact
