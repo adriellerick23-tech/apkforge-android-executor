@@ -5,5 +5,5 @@
     android:notificationTimeout="100"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
-    android:description="Permite ao Controle IA ler elementos visíveis e executar ações confirmadas."
+    android:description="@string/controle_ia_accessibility_description"
     android:settingsActivity="com.apkforge.runtime.MainActivity" />
