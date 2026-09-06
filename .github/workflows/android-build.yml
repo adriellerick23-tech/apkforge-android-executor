@@ -156,8 +156,8 @@ jobs:
           PROJECT_ROOT=$(find /tmp/controle-ia-source -name gradlew -not -path '*/node_modules/*' -print -quit | xargs dirname)
           cd "$PROJECT_ROOT"
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
-          cp app/build/outputs/apk/debug/app-debug.apk /tmp/apkforge-output/app-debug.apk
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk /tmp/apkforge-output/app-debug.apk
 
       - name: Build debug APK
         if: ${{ inputs.source_mode != 'expo' }}
